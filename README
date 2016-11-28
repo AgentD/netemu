@@ -1,0 +1,38 @@
+This directory contains the source code of a simple network emulation tool
+that uses Linux Network Namespaces to emulate a network setup that it reads
+from a textual description.
+
+It is loosely based on a set of highly specialized tools I developed at work.
+
+This is a "clean" rewrite from scratch for my bachelor thesis at the
+university of Innsbruck.
+
+
+To use this, you will need:
+  - A kernel with namespace support, i.e. a recent kernel
+  - A libc with namespace support, i.e. something more recent than CentOS 6
+  - gcc, make
+  - maybe other stuff that I didn't think of
+
+
+Run make to build everything. It generates two tools: nettool and testtool.
+
+The program "nettool" manages virtual networks. And is run like this:
+
+  nettool <configfile> [start|stop|graph]
+
+The target "start" creates the virtual network, "stop" destroys the existing
+virtual network and "graph" wrties commands to stdout that can be piped into
+one of the dot tools to generate a graph.
+
+Example:
+
+  ./nettool demo/nat.cfg graph | sfdp -T svg > test.svg
+
+
+The program "testtool" runs a list of automated tests inside a virtual network
+and checks for success/failure exit status.
+
+
+Example configurations can be found in the "demo" subdirectory.
+
