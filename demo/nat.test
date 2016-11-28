@@ -1,0 +1,78 @@
+router0 daemon tcpdump --immediate-mode -n -w router0.pcap -i any
+router1 daemon tcpdump --immediate-mode -n -w router1.pcap -i any
+websrv daemon tcpdump --immediate-mode -n -w websrv.pcap -i any
+websrv daemon ./websrv.sh
+
+# test connections on site 0
+mustwork
+onerror client0 cannot reach local network
+client0 ping 192.168.1.1    # must be able to reach router0 local IF
+
+onerror client0 cannot reach routers on global network
+client0 ping 172.16.20.19   # must be able to reach router0 public IF
+client0 ping 172.16.35.12   # must be able to reach router1 public IF
+
+onerror router0 cannot reach local network
+router0 ping 192.168.1.2    # client0 local IF
+
+onerror router0 cannot reach global network
+router0 ping 172.16.35.12   # router1 public IF
+
+onerror site 0 cannot reach web server
+client0 ping 172.16.30.16   # both must be able to reach websrv
+router0 ping 172.16.30.16
+
+mustfail
+onerror site 0 can reach site 1 local network
+client0 ping 192.168.0.1    # must not be able to to reach router1 public IF
+client0 ping 192.168.0.2    # must not be able to to reach client1 public IF
+router0 ping 192.168.0.1
+router0 ping 192.168.0.2
+
+# test connections on site 1
+mustwork
+onerror client1 cannot reach local network
+client1 ping 192.168.0.1    # must be able to reach router1 local IF
+
+onerror client1 cannot reach routers on global network
+client1 ping 172.16.20.19   # must be able to reach router0 public IF
+client1 ping 172.16.35.12   # must be able to reach router1 public IF
+
+onerror router1 cannot reach local network
+router1 ping 192.168.0.2    # client1 local IF
+
+onerror router1 cannot reach global network
+router1 ping 172.16.20.19   # router0 public IF
+
+onerror site 1 cannot reach web server
+client1 ping 172.16.30.16   # both must be able to reach websrv
+router1 ping 172.16.30.16
+
+mustfail
+onerror site 1 can reach site 1 local network
+client1 ping 192.168.1.1    # must not be able to to reach router0 public IF
+client1 ping 192.168.1.2    # must not be able to to reach client0 public IF
+router1 ping 192.168.1.1
+router1 ping 192.168.1.2
+
+# test connections on web server
+mustwork
+onerror webserver can't reach routers on global network
+websrv ping 172.16.20.19
+websrv ping 172.16.35.12
+
+mustfail
+onerror webserver can reach local networks
+websrv ping 192.168.0.1
+websrv ping 192.168.0.2
+websrv ping 192.168.1.1
+websrv ping 192.168.1.2
+
+# fetch pages from web server
+mustwork
+onerror client0 cannot download from web server
+client0 wget 172.16.30.16:8080
+
+onerror client1 cannot download from web server
+client1 wget 172.16.30.16:8080
+
