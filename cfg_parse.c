@@ -51,9 +51,12 @@ static int proccess_arguments(parse_ctx_t *ctx, const parser_token_t *tk,
 	return 0;
 }
 
-static int process_token(parse_ctx_t *ctx, const parser_token_t *allowed)
+static int process_token(parse_ctx_t *ctx, const parser_token_t *allowed,
+			void *parent)
 {
 	cfg_token_t tk, next;
+	void *object;
+	off_t offset;
 	size_t i;
 	int ret;
 
@@ -71,8 +74,17 @@ static int process_token(parse_ctx_t *ctx, const parser_token_t *allowed)
 	if (!allowed[i].token)
 		goto fail_kw;
 
-	/* consume arguments */
+	/* check arguments */
+	offset = ctx->readoff;
+
 	if (proccess_arguments(ctx, allowed + i, tk.linenumber))
+		return -1;
+
+	/* deserialize */
+	ctx->readoff = offset;
+
+	object = allowed[i].deserialize(ctx, tk.linenumber, parent);
+	if (!object)
 		return -1;
 
 	/* recursively handle children */
@@ -95,7 +107,7 @@ static int process_token(parse_ctx_t *ctx, const parser_token_t *allowed)
 				break;
 			}
 
-			ret = process_token(ctx, allowed[i].children);
+			ret = process_token(ctx, allowed[i].children, object);
 			if (ret < 0)
 				return -1;
 			if (ret == 0)
@@ -118,71 +130,13 @@ fail_end:
 	return -1;
 }
 
-static int deserialize(parse_ctx_t *ctx, const parser_token_t *allowed,
-			void *parent)
-{
-	cfg_token_t tk;
-	void *object;
-	size_t i;
-	int ret;
-
-	if ((ret = cfg_next_token(ctx, &tk, 0)) <= 0)
-		return ret;
-
-	for (i = 0; allowed[i].token; ++i) {
-		if (tk.id == allowed[i].token)
-			break;
-	}
-
-	assert(allowed[i].token == tk.id);
-
-	object = allowed[i].deserialize(ctx, tk.linenumber, parent);
-	if (!object)
-		return -1;
-
-	if (allowed[i].children) {
-		ret = cfg_next_token(ctx, &tk, 0);
-		if (ret < 0)
-			return -1;
-
-		assert(ret > 0 && tk.id == TK_BLOCK);
-
-		while (1) {
-			ret = cfg_next_token(ctx, &tk, 1);
-			if (ret < 0)
-				return -1;
-
-			assert(ret != 0);
-
-			if (tk.id == TK_END) {
-				ctx->readoff += sizeof(tk);
-				break;
-			}
-
-			ret = deserialize(ctx, allowed[i].children, object);
-			if (ret <= 0)
-				return -1;
-		}
-	}
-	return 1;
-}
-
 int cfg_parse(int fd)
 {
 	parse_ctx_t ctx = { .fd = fd, .readoff = 0 };
 	int ret;
 
 	do {
-		ret = process_token(&ctx, global_tokens);
-	} while (ret > 0);
-
-	if (ret != 0)
-		return ret;
-
-	ctx.readoff = 0;
-
-	do {
-		ret = deserialize(&ctx, global_tokens, NULL);
+		ret = process_token(&ctx, global_tokens, NULL);
 	} while (ret > 0);
 
 	return ret;
