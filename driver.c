@@ -1,9 +1,20 @@
+#include <string.h>
 #include <stdio.h>
 
 #include "driver.h"
 
 
 static driver_t *drivers[DRV_PRIORITY_MAX];
+
+
+static const struct {
+	const char *name;
+	int cmd;
+} command_map[] = {
+	{ "start", CMD_START },
+	{ "stop", CMD_STOP },
+	{ "graph", CMD_GRAPH },
+};
 
 
 int driver_register(driver_t *drv, int priority)
@@ -60,3 +71,14 @@ fail_cmd:
 	return -1;
 }
 
+int driver_command_from_str(const char *str)
+{
+	size_t i;
+
+	for (i = 0; i < sizeof(command_map) / sizeof(command_map[0]); ++i) {
+		if (!strcmp(command_map[i].name, str))
+			return command_map[i].cmd;
+	}
+
+	return 0;
+}

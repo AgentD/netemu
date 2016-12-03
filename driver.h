@@ -54,5 +54,7 @@ int driver_register(driver_t *drv, int priority);
 
 int driver_run(int command);
 
+int driver_command_from_str(const char *str);
+
 #endif /* DRIVER_H */
 

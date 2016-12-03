@@ -36,13 +36,8 @@ int main(int argc, char **argv)
 	if (argc != 3)
 		usage(EXIT_FAILURE);
 
-	if (!strcmp(argv[2], "start"))
-		cmd = CMD_START;
-	else if (!strcmp(argv[2], "stop"))
-		cmd = CMD_STOP;
-	else if (!strcmp(argv[2], "graph"))
-		cmd = CMD_GRAPH;
-	else
+	cmd = driver_command_from_str(argv[2]);
+	if (!cmd)
 		usage(EXIT_FAILURE);
 
 	if (cfg_read(argv[1]))
