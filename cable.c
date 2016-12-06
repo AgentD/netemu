@@ -190,11 +190,27 @@ static void cables_cleanup(void)
 	}
 }
 
+static void configure_netem(cfg_cable *cable)
+{
+	cfg_node_port *upper = cable->upper, *lower = cable->lower;
+
+	if (cable->uplimit[0]) {
+		netns_run(lower->owner->name,
+			"tc qdisc add dev %s root netem rate %s",
+			lower->name, cable->uplimit);
+	}
+
+	if (cable->downlimit[0]) {
+		netns_run(upper->owner->name,
+			"tc qdisc add dev %s root netem rate %s",
+			upper->name, cable->downlimit);
+	}
+}
+
 static int cable_drv_start(driver_t *drv)
 {
 	cfg_node_port *upper, *lower;
 	cfg_cable *cable;
-	size_t i;
 	(void)drv;
 
 	for (cable = cables; cable != NULL; cable = cable->next) {
@@ -223,27 +239,10 @@ static int cable_drv_start(driver_t *drv)
 		netns_run(lower->owner->name, "ip link set %s-%s name %s",
 			upper->owner->name, upper->name, lower->name);
 
-		netns_run(lower->owner->name, "ip link set dev %s up",
-						lower->name);
-
-		/* set limits */
-		if (cable->uplimit[0]) {
-			netns_run(lower->owner->name,
-				"tc qdisc add dev %s root netem rate %s",
-				lower->name, cable->uplimit);
-		}
-
-		if (cable->downlimit[0]) {
-			netns_run(upper->owner->name,
-				"tc qdisc add dev %s root netem rate %s",
-				upper->name, cable->downlimit);
-		}
-
 		/* reconfigure */
-		for (i = 0; i < lower->num_addresses; ++i) {
-			netns_run(lower->owner->name, "ip addr add %s dev %s",
-				lower->addresses[i], lower->name);
-		}
+		node_configure_port(lower);
+
+		configure_netem(cable);
 	}
 	return 0;
 }

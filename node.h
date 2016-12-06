@@ -44,5 +44,7 @@ cfg_node *node_find(const char *name);
 
 cfg_node_port *node_find_port(cfg_node *node, const char *name);
 
+int node_configure_port(cfg_node_port *port);
+
 #endif /* NODE_H */
 

@@ -288,12 +288,25 @@ static void nodes_cleanup(void)
 	}
 }
 
+int node_configure_port(cfg_node_port *p)
+{
+	cfg_node *n = p->owner;
+	size_t i;
+
+	netns_run(n->name, "ip link set dev %s up", p->name);
+
+	for (i = 0; i < p->num_addresses; ++i) {
+		netns_run(n->name, "ip addr add %s dev %s",
+				p->addresses[i], p->name);
+	}
+	return 0;
+}
+
 static int node_drv_start(driver_t *drv)
 {
 	cfg_node_argvec *v;
 	cfg_node_port *p;
 	cfg_node *n;
-	size_t i;
 	(void)drv;
 
 	for (n = nodes; n != NULL; n = n->next) {
@@ -311,12 +324,8 @@ static int node_drv_start(driver_t *drv)
 
 			netns_run(n->name, "ip link set node-%s name %s",
 				p->name, p->name);
-			netns_run(n->name, "ip link set dev %s up", p->name);
 
-			for (i = 0; i < p->num_addresses; ++i) {
-				netns_run(n->name, "ip addr add %s dev %s",
-					p->addresses[i], p->name);
-			}
+			node_configure_port(p);
 		}
 
 		if (n->allow_forward) {
