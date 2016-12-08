@@ -11,10 +11,10 @@
 #include <assert.h>
 #include <arpa/inet.h>
 
-#include "driver.h"
-#include "netns.h"
+#include "../driver.h"
+#include "../netns.h"
+#include "../cfg.h"
 #include "node.h"
-#include "cfg.h"
 
 #define ADDR_TYPE_V4 1
 #define ADDR_TYPE_V6 2

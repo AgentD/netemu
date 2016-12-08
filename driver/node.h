@@ -2,7 +2,7 @@
 #define NODE_H
 
 
-#include "cfg.h"
+#include "../cfg.h"
 
 
 typedef struct cfg_node cfg_node;

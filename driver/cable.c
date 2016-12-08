@@ -5,10 +5,10 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "driver.h"
+#include "../driver.h"
+#include "../netns.h"
+#include "../cfg.h"
 #include "cable.h"
-#include "netns.h"
-#include "cfg.h"
 
 
 static cfg_cable *cables = NULL;
