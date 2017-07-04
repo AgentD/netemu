@@ -79,6 +79,7 @@ static cfg_node *create_node(parse_ctx_t *ctx, int lineno, void *parent)
 {
 	cfg_node *node = calloc(1, sizeof(*node));
 	cfg_token_t tk;
+	cfg_node *n;
 	int ret;
 
 	assert(parent == NULL);
@@ -97,6 +98,14 @@ static cfg_node *create_node(parse_ctx_t *ctx, int lineno, void *parent)
 		goto fail;
 
 	assert(ret == 0);
+
+	for (n = nodes; n != NULL; n = n->next) {
+		if (!strcmp(n->name, node->name)) {
+			fprintf(stderr, "%d: node '%s' redefined\n",
+					lineno, node->name);
+			goto fail;
+		}
+	}
 
 	node->next = nodes;
 	nodes = node;
