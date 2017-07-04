@@ -9,6 +9,7 @@ typedef struct cfg_node cfg_node;
 typedef struct cfg_node_port cfg_node_port;
 typedef struct cfg_iptables cfg_iptables;
 typedef struct cfg_node_argvec cfg_node_argvec;
+typedef struct cfg_node_lan_fwd cfg_node_lan_fwd;
 
 
 struct cfg_node_argvec {
@@ -16,6 +17,16 @@ struct cfg_node_argvec {
 	int argc;
 
 	cfg_node_argvec *next;
+};
+
+struct cfg_node_lan_fwd {
+	cfg_node_port *port;
+	char external[MAX_NAME + 1];
+
+	char **addresses;
+	size_t num_addresses;
+
+	cfg_node_lan_fwd *next;
 };
 
 struct cfg_node_port {
@@ -35,6 +46,7 @@ struct cfg_node {
 	cfg_node_port *ports;
 	cfg_node_argvec *iptables;
 	cfg_node_argvec *routes;
+	cfg_node_lan_fwd *fwd;
 
 	cfg_node *next;
 };

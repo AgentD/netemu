@@ -26,6 +26,14 @@ static int node_port_arg(parse_ctx_t *ctx, int index, int lineno)
 	return cfg_check_ip_addr_arg(ctx, index, lineno);
 }
 
+static int node_lanfwd_arg(parse_ctx_t *ctx, int index, int lineno)
+{
+	if (index < 2)
+		return cfg_check_name_arg(ctx, index, lineno);
+
+	return cfg_check_ip_addr_arg(ctx, index, lineno);
+}
+
 static cfg_node *create_node(parse_ctx_t *ctx, int lineno, void *parent)
 {
 	cfg_node *node = calloc(1, sizeof(*node));
@@ -139,6 +147,65 @@ fail_alloc:
 	return NULL;
 }
 
+static cfg_node_lan_fwd *add_lan_forward(parse_ctx_t *ctx, int lineno,
+					cfg_node *node)
+{
+	char name[MAX_NAME + 1];
+	cfg_node_lan_fwd *fwd;
+	cfg_node_port *p;
+	cfg_token_t tk;
+	int ret, count;
+
+	/* get node port */
+	if ((ret = cfg_next_token(ctx, &tk, 0)) < 0)
+		return NULL;
+
+	assert(ret > 0 && tk.id == TK_ARG);
+	if (cfg_get_arg(ctx, name, sizeof(name)))
+		return NULL;
+
+	p = node_find_port(node, name);
+
+	if (!p) {
+		fprintf(stderr, "%d: cannot find port '%s'\n", lineno, name);
+		return NULL;
+	}
+
+	/* get external port name */
+	if ((ret = cfg_next_token(ctx, &tk, 0)) < 0)
+		return NULL;
+
+	assert(ret > 0 && tk.id == TK_ARG);
+	if (cfg_get_arg(ctx, name, sizeof(name)))
+		return NULL;
+
+	/* create forwarding rule */
+	fwd = calloc(1, sizeof(*fwd));
+	if (!fwd) {
+		fprintf(stderr, "%d: out of memory\n", lineno);
+		return NULL;
+	}
+
+	/* get addresses to assign to external veth pair device */
+	fwd->addresses = cfg_read_argvec(ctx, &count, lineno);
+	if (!fwd->addresses) {
+		free(fwd);
+		fprintf(stderr, "%d: out of memory\n", lineno);
+		return NULL;
+	}
+
+	/* store changes */
+	strcpy(fwd->external, name);
+	fwd->port = p;
+	fwd->num_addresses = count;
+
+	p->connected = 1;
+
+	fwd->next = node->fwd;
+	node->fwd = fwd;
+	return fwd;
+}
+
 static cfg_node_argvec *add_iptables(parse_ctx_t *ctx, int lineno,
 					cfg_node *node)
 {
@@ -201,6 +268,7 @@ cfg_node_port *node_find_port(cfg_node *node, const char *name)
 
 static void nodes_cleanup(void)
 {
+	cfg_node_lan_fwd *fwd;
 	cfg_node_argvec *v;
 	cfg_node_port *p;
 	cfg_node *n;
@@ -244,6 +312,17 @@ static void nodes_cleanup(void)
 			free(v);
 		}
 
+		while (n->fwd != NULL) {
+			fwd = n->fwd;
+			n->fwd = fwd->next;
+
+			for (i = 0; i < fwd->num_addresses; ++i)
+				free(fwd->addresses[i]);
+
+			free(fwd->addresses);
+			free(fwd);
+		}
+
 		free(n);
 	}
 }
@@ -262,11 +341,41 @@ int node_configure_port(cfg_node_port *p)
 	return 0;
 }
 
+static void setup_forward(const char *node, const char *external,
+			const char *internal)
+{
+	netns_run(NULL, "iptables -t nat -A POSTROUTING -o %s -j MASQUERADE",
+			external);
+
+	netns_run(NULL, "iptables -A FORWARD -i %s -o %s-%s -m state "
+			"--state RELATED,ESTABLISHED -j ACCEPT",
+			external, node, internal);
+
+	netns_run(NULL, "iptables -A FORWARD -i %s-%s -o %s -j ACCEPT",
+			node, internal, external);
+}
+
+static void teardown_forward(const char *node, const char *external,
+				const char *internal)
+{
+	netns_run(NULL, "iptables -t nat -D POSTROUTING -o %s -j MASQUERADE",
+			external);
+
+	netns_run(NULL, "iptables -D FORWARD -i %s -o %s-%s -m state "
+			"--state RELATED,ESTABLISHED -j ACCEPT",
+			external, node, internal);
+
+	netns_run(NULL, "iptables -D FORWARD -i %s-%s -o %s -j ACCEPT",
+			node, internal, external);
+}
+
 static int node_drv_start(driver_t *drv)
 {
+	cfg_node_lan_fwd *fwd;
 	cfg_node_argvec *v;
 	cfg_node_port *p;
 	cfg_node *n;
+	size_t i;
 	(void)drv;
 
 	for (n = nodes; n != NULL; n = n->next) {
@@ -302,17 +411,38 @@ static int node_drv_start(driver_t *drv)
 					v->argc, v->argv);
 		}
 
+		if (n->fwd)
+			netns_run(NULL, "sysctl -w net.ipv4.ip_forward=1");
+
+		for (fwd = n->fwd; fwd != NULL; fwd = fwd->next) {
+			for (i = 0; i < fwd->num_addresses; ++i) {
+				netns_run(NULL, "ip addr add %s dev %s-%s",
+						fwd->addresses[i],
+						n->name, fwd->port->name);
+			}
+
+			setup_forward(n->name, fwd->external, fwd->port->name);
+		}
 	}
 	return 0;
 }
 
 static int node_drv_stop(driver_t *drv)
 {
+	cfg_node_lan_fwd *fwd;
 	cfg_node_port *p;
 	cfg_node *n;
 	(void)drv;
 
 	for (n = nodes; n != NULL; n = n->next) {
+		if (n->fwd)
+			netns_run(NULL, "sysctl -w net.ipv4.ip_forward=0");
+
+		for (fwd = n->fwd; fwd != NULL; fwd = fwd->next) {
+			teardown_forward(n->name, fwd->external,
+					fwd->port->name);
+		}
+
 		for (p = n->ports; p != NULL; p = p->next) {
 			netns_run(NULL, "ip link del %s-%s",
 					n->name, p->name);
@@ -355,6 +485,12 @@ static parser_token_t node_tokens[] = {
 		.flags = FLAG_ARG_MIN,
 		.argcount = 1,
 		.deserialize = (deserialize_fun_t)add_iptables,
+	}, {
+		.keyword = "lanfwd",
+		.flags = FLAG_ARG_MIN,
+		.argcount = 2,
+		.argfun = node_lanfwd_arg,
+		.deserialize = (deserialize_fun_t)add_lan_forward,
 	}, {
 		.keyword = NULL,
 	},
