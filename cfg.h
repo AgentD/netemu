@@ -2,6 +2,7 @@
 #define CFG_H
 
 
+#include <sys/socket.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,6 +14,9 @@
 #define MIN_NAME 1
 #define MAX_NAME 32
 #define MAX_CLEANUP_HANDLERS 32
+
+#define ADDR_TYPE_V4 1
+#define ADDR_TYPE_V6 2
 
 
 typedef enum {
@@ -160,6 +164,26 @@ int cfg_check_name(const char *name, int lineno);
 	for parser_token_t.
  */
 int cfg_check_name_arg(parse_ctx_t *ctx, int index, int lineno);
+
+/*
+	Parse an IPv4 or IPv6 address and optional subnet mask from a
+	string (buffer is modified). The supplied lineno is used for
+	printing fancy error messages.
+
+	If the out, len and netmask pointers are not NULL, they will
+	be set to the resulting address, address length and subnet
+	mask respectively.
+ */
+int cfg_parse_ip_addr(char *buffer, int lineno,
+			struct sockaddr_storage *out, socklen_t *len,
+			int *netmask);
+
+/*
+	Read an argument string and run it through cfg_parse_ip_addr. The
+	supplied index is ignored and only accepted, so it can be used as
+	an argfun for parser_token_t.
+ */
+int cfg_check_ip_addr_arg(parse_ctx_t *ctx, int index, int lineno);
 
 /*
 	Register a function that is called by cfg_cleanup when flushing

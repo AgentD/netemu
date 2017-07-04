@@ -16,63 +16,14 @@
 #include "../cfg.h"
 #include "node.h"
 
-#define ADDR_TYPE_V4 1
-#define ADDR_TYPE_V6 2
-
 static cfg_node *nodes = NULL;
 
 static int node_port_arg(parse_ctx_t *ctx, int index, int lineno)
 {
-	char buffer[64], *submask;
-	struct in6_addr addr6;
-	struct in_addr addr4;
-	int mask, type;
-	size_t i = 0;
-
 	if (index == 0)
 		return cfg_check_name_arg(ctx, index, lineno);
 
-	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
-		return -1;
-
-	submask = strrchr(buffer, '/');
-	if (submask)
-		*(submask++) = '\0';
-
-	if (inet_pton(AF_INET, buffer, &addr4) > 0) {
-		type = ADDR_TYPE_V4;
-	} else if (inet_pton(AF_INET6, buffer, &addr6) > 0) {
-		type = ADDR_TYPE_V6;
-	} else {
-		goto fail;
-	}
-
-	if (submask) {
-		if (!isdigit(*submask))
-			goto fail_submask;
-		mask = 0;
-		for (i = 0; isdigit(submask[i]); ++i)
-			mask = mask * 10 + submask[i] - '0';
-		if (submask[i])
-			goto fail_submask;
-		if (type == ADDR_TYPE_V4 && mask > 32)
-			goto fail_mask_range;
-		if (type == ADDR_TYPE_V6 && mask > 128)
-			goto fail_mask_range;
-	}
-	return 0;
-fail:
-	fprintf(stderr, "%d: expected IPv4 or IPv6 address, found '%s'\n",
-		lineno, buffer);
-	return -1;
-fail_submask:
-	fprintf(stderr, "%d: expected subnetmask after '%s', found '%s'\n",
-		lineno, buffer, submask);
-	return -1;
-fail_mask_range:
-	fprintf(stderr, "%d: subnetmask %d out of range for '%s'\n",
-		lineno, mask, buffer);
-	return -1;
+	return cfg_check_ip_addr_arg(ctx, index, lineno);
 }
 
 static cfg_node *create_node(parse_ctx_t *ctx, int lineno, void *parent)

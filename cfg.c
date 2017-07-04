@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#include <arpa/inet.h>
+
 #include "cfg.h"
 
 static cleanup_fun_t cleanup_handlers[MAX_CLEANUP_HANDLERS];
@@ -84,6 +86,91 @@ int cfg_check_name_arg(parse_ctx_t *ctx, int index, int lineno)
 		return -1;
 
 	return cfg_check_name(buffer, lineno);
+}
+
+int cfg_parse_ip_addr(char *buffer, int lineno,
+			struct sockaddr_storage *out, socklen_t *len,
+			int *netmask)
+{
+	struct in6_addr addr6;
+	struct in_addr addr4;
+	int mask, type;
+	char *submask;
+	size_t i = 0;
+
+	submask = strrchr(buffer, '/');
+	if (submask)
+		*(submask++) = '\0';
+
+	if (inet_pton(AF_INET, buffer, &addr4) > 0) {
+		type = ADDR_TYPE_V4;
+		if (len)
+			*len = sizeof(struct sockaddr_in);
+		if (out) {
+			memset(out, 0, sizeof(*out));
+			out->ss_family = AF_INET;
+			((struct sockaddr_in *)out)->sin_addr = addr4;
+		}
+	} else if (inet_pton(AF_INET6, buffer, &addr6) > 0) {
+		type = ADDR_TYPE_V6;
+		if (len)
+			*len = sizeof(struct sockaddr_in6);
+		if (out) {
+			memset(out, 0, sizeof(*out));
+			out->ss_family = AF_INET6;
+			((struct sockaddr_in6 *)out)->sin6_addr = addr6;
+		}
+	} else {
+		goto fail;
+	}
+
+	mask = 0;
+
+	if (submask) {
+		if (!isdigit(*submask))
+			goto fail_submask;
+		for (i = 0; isdigit(submask[i]); ++i)
+			mask = mask * 10 + submask[i] - '0';
+		if (submask[i])
+			goto fail_submask;
+	} else {
+		if (type == ADDR_TYPE_V4)
+			mask = 32;
+		if (type == ADDR_TYPE_V6)
+			mask = 128;
+	}
+
+	if (type == ADDR_TYPE_V4 && mask > 32)
+		goto fail_mask_range;
+	if (type == ADDR_TYPE_V6 && mask > 128)
+		goto fail_mask_range;
+
+	if (netmask)
+		*netmask = mask;
+	return 0;
+fail:
+	fprintf(stderr, "%d: expected IPv4 or IPv6 address, found '%s'\n",
+		lineno, buffer);
+	return -1;
+fail_submask:
+	fprintf(stderr, "%d: expected subnetmask after '%s', found '%s'\n",
+		lineno, buffer, submask);
+	return -1;
+fail_mask_range:
+	fprintf(stderr, "%d: subnetmask %d out of range for '%s'\n",
+		lineno, mask, buffer);
+	return -1;
+}
+
+int cfg_check_ip_addr_arg(parse_ctx_t *ctx, int index, int lineno)
+{
+	char buffer[64];
+	(void)index;
+
+	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
+		return -1;
+
+	return cfg_parse_ip_addr(buffer, lineno, NULL, NULL, NULL);
 }
 
 int cfg_next_token(parse_ctx_t *ctx, cfg_token_t *tk, int peek)
