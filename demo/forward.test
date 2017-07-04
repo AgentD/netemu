@@ -1,0 +1,16 @@
+router0 daemon tcpdump --immediate-mode -n -w router0.pcap -i any
+client0 daemon tcpdump --immediate-mode -n -w client0.pcap -i any
+
+mustwork
+onerror client0 cannot reach local network
+client0 ping 192.168.1.1    # must be able to reach router0 local IF
+
+onerror router0 cannot reach local network
+router0 ping 192.168.1.2    # client0 local IF
+
+onerror router0 cannot reach internet
+router0 ping 8.8.8.8
+
+onerror client0 cannot reach internet
+client0 ping 8.8.8.8
+
