@@ -4,6 +4,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "cfg.h"
 
@@ -39,6 +40,41 @@ int cfg_get_arg(parse_ctx_t *ctx, char *buffer, size_t size)
 	return 0;
 }
 
+int cfg_check_name(const char *name, int lineno)
+{
+	int i, len;
+
+	len = strlen(name);
+
+	for (i = 0; i < len; ++i) {
+		if (!isalnum(name[i]) && name[i] != '_') {
+			fprintf(stderr, "%d: name '%s' contains invalid "
+				"chararacters (not alphanumeric or '_')\n",
+				lineno, name);
+			return -1;
+		}
+	}
+
+	if (len < MIN_NAME) {
+		fprintf(stderr, "%d: name '%s' is too short (minimum is %d "
+			"chararacters)\n", lineno, name, MIN_NAME);
+		return -1;
+	}
+
+	if (len > MAX_NAME) {
+		fprintf(stderr, "%d: name '%s' is too long (maximum is %d "
+			"chararacters)\n", lineno, name, MAX_NAME);
+		return -1;
+	}
+
+	if (!isalpha(name[0])) {
+		fprintf(stderr, "%d: name '%s' must begin with a letter\n",
+			lineno, name);
+		return -1;
+	}
+	return 0;
+}
+
 int cfg_check_name_arg(parse_ctx_t *ctx, int index, int lineno)
 {
 	char buffer[MAX_NAME * 2];
@@ -47,12 +83,7 @@ int cfg_check_name_arg(parse_ctx_t *ctx, int index, int lineno)
 	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
 		return -1;
 
-	if (strlen(buffer) > MAX_NAME) {
-		fprintf(stderr, "%d: name '%s' is too long (maximum is %d "
-			"chararacters)\n", lineno, buffer, MAX_NAME);
-		return -1;
-	}
-	return 0;
+	return cfg_check_name(buffer, lineno);
 }
 
 int cfg_next_token(parse_ctx_t *ctx, cfg_token_t *tk, int peek)

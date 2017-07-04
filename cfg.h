@@ -10,6 +10,7 @@
 #define TEMPDIR "/tmp"
 #define TEMPNAME "nettool"
 
+#define MIN_NAME 1
 #define MAX_NAME 32
 #define MAX_CLEANUP_HANDLERS 32
 
@@ -146,9 +147,17 @@ void cfg_unregister_keywords(void);
 void cfg_unregister_parser_tokens(void);
 
 /*
-	Read an argument string and check if has a maximum of MAX_NAME
-	characters. The supplied index is ignored and only accepted, so
-	it can be used as an argfun for parser_token_t.
+	Check if a name string is valid, i.e. between MIN_NAME and MAX_NAME,
+	only contains alphanumeric characters or '_' and begins with a letter.
+
+	The supplied line number is used for printing a fancy error message.
+ */
+int cfg_check_name(const char *name, int lineno);
+
+/*
+	Read an argument string and check if it is a valid name. The supplied
+	index is ignored and only accepted, so it can be used as an argfun
+	for parser_token_t.
  */
 int cfg_check_name_arg(parse_ctx_t *ctx, int index, int lineno);
 
