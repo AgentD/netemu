@@ -397,6 +397,8 @@ static int node_drv_start(driver_t *drv)
 			node_configure_port(p);
 		}
 
+		netns_run(n->name, "ip link set dev lo up");
+
 		if (n->allow_forward) {
 			netns_run(n->name, "sysctl -w net.ipv4.ip_forward=1");
 		}
