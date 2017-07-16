@@ -14,29 +14,6 @@
 static cfg_cable *cables = NULL;
 
 
-static const char *suffix[] = {
-	"bit",
-	"Kibit",
-	"kbit",
-	"mibit",
-	"mbit",
-	"gibit",
-	"gbit",
-	"tibit",
-	"tbit",
-	"Bps",
-	"KiBps",
-	"KBps",
-	"MiBps",
-	"MBps",
-	"GiBps",
-	"GBps",
-	"TiBps",
-	"TBps",
-	NULL
-};
-
-
 static cfg_cable *create_cable(parse_ctx_t *ctx, int lineno, void *parent)
 {
 	cfg_cable *cable = calloc(1, sizeof(*cable));
@@ -54,8 +31,7 @@ static cfg_cable *create_cable(parse_ctx_t *ctx, int lineno, void *parent)
 
 static int check_cable_port(parse_ctx_t *ctx, int index, int lineno)
 {
-	char buffer[MAX_LIMIT_STR], *ptr;
-	size_t i;
+	char buffer[MAX_LIMIT_STR];
 
 	if (index < 2)
 		return cfg_check_name_arg(ctx, index, lineno);
@@ -70,26 +46,7 @@ static int check_cable_port(parse_ctx_t *ctx, int index, int lineno)
 			return -1;
 		}
 
-		if (!isdigit(buffer[0])) {
-			fprintf(stderr, "%d: bandwidth must be "
-				"integer value\n", lineno);
-			return -1;
-		}
-		for (ptr = buffer; isdigit(*ptr); ++ptr)
-			;
-
-		if (*ptr) {
-			for (i = 0; suffix[i]; ++i) {
-				if (!strcasecmp(ptr, suffix[i]))
-					break;
-			}
-			if (!suffix[i]) {
-				fprintf(stderr, "%d: unknown suffix '%s'\n",
-					lineno, ptr);
-				return -1;
-			}
-		}
-		return 0;
+		return cfg_parse_bandwidth(buffer, lineno, NULL);
 	}
 
 	fprintf(stderr, "%d: too many arguments\n", lineno);
@@ -165,10 +122,11 @@ static cfg_node_port *add_port(parse_ctx_t *ctx, int lineno, cfg_cable *cable)
 		}
 		cable->lower = p;
 
-		strcpy(cable->uplimit, limit);
+		cfg_parse_bandwidth(limit, lineno, &cable->uplimit);
 	} else {
 		cable->upper = p;
-		strcpy(cable->downlimit, limit);
+
+		cfg_parse_bandwidth(limit, lineno, &cable->downlimit);
 	}
 
 	p->connected = 1;
@@ -193,17 +151,25 @@ static void cables_cleanup(void)
 static void configure_netem(cfg_cable *cable)
 {
 	cfg_node_port *upper = cable->upper, *lower = cable->lower;
+	char temp[MAX_LIMIT_STR * 2];
+	bandwidth_t bw;
 
-	if (cable->uplimit[0]) {
+	if (cable->uplimit.value) {
+		bw = cable->uplimit;
+		cfg_bandwidth_to_str(temp, sizeof(temp), &bw);
+
 		netns_run(lower->owner->name,
 			"tc qdisc add dev %s root netem rate %s",
-			lower->name, cable->uplimit);
+			lower->name, temp);
 	}
 
-	if (cable->downlimit[0]) {
+	if (cable->downlimit.value) {
+		bw = cable->downlimit;
+		cfg_bandwidth_to_str(temp, sizeof(temp), &bw);
+
 		netns_run(upper->owner->name,
 			"tc qdisc add dev %s root netem rate %s",
-			upper->name, cable->downlimit);
+			upper->name, temp);
 	}
 }
 

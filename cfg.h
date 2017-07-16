@@ -19,6 +19,12 @@
 #define ADDR_TYPE_V6 2
 
 
+typedef struct {
+	unsigned int value;
+	unsigned long scale;
+} bandwidth_t;
+
+
 typedef enum {
 	TK_END = 0,
 	TK_BLOCK,
@@ -184,6 +190,10 @@ int cfg_parse_ip_addr(char *buffer, int lineno,
 	an argfun for parser_token_t.
  */
 int cfg_check_ip_addr_arg(parse_ctx_t *ctx, int index, int lineno);
+
+int cfg_parse_bandwidth(const char *buffer, int lineno, bandwidth_t *bw);
+
+int cfg_bandwidth_to_str(char *buffer, size_t len, bandwidth_t *bw);
 
 /*
 	Register a function that is called by cfg_cleanup when flushing

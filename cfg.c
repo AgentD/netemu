@@ -13,6 +13,34 @@
 static cleanup_fun_t cleanup_handlers[MAX_CLEANUP_HANDLERS];
 static size_t num_clenaup_handlers = 0;
 
+
+
+static struct {
+	const char *str;
+	unsigned long scale;
+} suffix[] = {
+	{ "bit",   1UL },
+	{ "Kibit", 1024UL },
+	{ "kbit",  1000UL },
+	{ "mibit", 1024UL * 1024UL },
+	{ "mbit",  1000UL * 1000UL },
+	{ "gibit", 1024UL * 1024UL * 1024UL },
+	{ "gbit",  1000UL * 1000UL * 1000UL },
+	{ "tibit", 1024UL * 1024UL * 1024UL * 1024UL },
+	{ "tbit",  1000UL * 1000UL * 1000UL * 1000UL },
+	{ "Bps",   8UL },
+	{ "KiBps", 8UL * 1024UL },
+	{ "KBps",  8UL * 1000UL },
+	{ "MiBps", 8UL * 1024UL * 1024UL },
+	{ "MBps",  8UL * 1000UL * 1000UL },
+	{ "GiBps", 8UL * 1024UL * 1024UL * 1024UL },
+	{ "GBps",  8UL * 1000UL * 1000UL * 1000UL },
+	{ "TiBps", 8UL * 1024UL * 1024UL * 1024UL * 1024UL },
+	{ "TBps",  8UL * 1000UL * 1000UL * 1000UL * 1000UL },
+	{ NULL, 0 },
+};
+
+
 int cfg_get_arg(parse_ctx_t *ctx, char *buffer, size_t size)
 {
 	size_t i = 0;
@@ -171,6 +199,74 @@ int cfg_check_ip_addr_arg(parse_ctx_t *ctx, int index, int lineno)
 		return -1;
 
 	return cfg_parse_ip_addr(buffer, lineno, NULL, NULL, NULL);
+}
+
+int cfg_parse_bandwidth(const char *buffer, int lineno, bandwidth_t *bw)
+{
+	unsigned int value = 0;
+	const char *ptr;
+	size_t i;
+
+	if (!isdigit(buffer[0])) {
+		fprintf(stderr, "%d: bandwidth must be "
+			"integer value\n", lineno);
+		return -1;
+	}
+
+	for (ptr = buffer; isdigit(*ptr); ++ptr)
+		value = value * 10 + (*ptr - '0');
+
+	if (bw) {
+		bw->value = value;
+		bw->scale = 1;
+	}
+
+	if (*ptr) {
+		for (i = 0; suffix[i].str; ++i) {
+			if (!strcasecmp(ptr, suffix[i].str))
+				break;
+		}
+		if (!suffix[i].str) {
+			fprintf(stderr, "%d: unknown suffix '%s'\n",
+				lineno, ptr);
+			return -1;
+		}
+
+		if (bw)
+			bw->scale = suffix[i].scale;
+	}
+
+	return 0;
+}
+
+int cfg_bandwidth_to_str(char *buffer, size_t len, bandwidth_t *bw)
+{
+	size_t i, sfx = 0;
+	double ratio;
+	int ret;
+
+	for (i = 0; suffix[i].str; ++i) {
+		if (suffix[i].scale > bw->scale)
+			continue;
+		if (suffix[i].scale <= suffix[sfx].scale)
+			continue;
+		sfx = i;
+	}
+
+	if (suffix[sfx].scale == bw->scale) {
+		ret = snprintf(buffer, len, "%u%s",
+			       bw->value,suffix[sfx].str);
+	} else {
+		ratio = (double)bw->scale / (double)suffix[sfx].scale;
+
+		ret = snprintf(buffer, len, "%3.3f%s",
+			       bw->value * ratio, suffix[sfx].str);
+	}
+
+	if (ret < 0 || ((size_t)ret >= len))
+		return -1;
+
+	return 0;
 }
 
 int cfg_next_token(parse_ctx_t *ctx, cfg_token_t *tk, int peek)
