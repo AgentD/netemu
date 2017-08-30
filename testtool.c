@@ -118,16 +118,6 @@ int main(int argc, char **argv)
 
 	fcntl(fileno(in), F_SETFD, FD_CLOEXEC);
 
-	/* switch to input file dir */
-	end = strrchr(argv[1], '/');
-	if (end) {
-		*end = '\0';
-		if (chdir(argv[1]) != 0) {
-			perror("chdir");
-			goto out;
-		}
-	}
-
 	/* init */
 	onerror = strdup("test failed");
 	if (!onerror) {
