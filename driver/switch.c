@@ -119,14 +119,15 @@ static int switch_drv_start(driver_t *drv)
 	(void)drv;
 
 	for (sw = switches; sw != NULL; sw = sw->next, ++i) {
-		netns_run(NULL, "brctl addbr switch%d", i);
+		netns_run(NULL, "ip link add name switch%d type bridge", i);
 		netns_run(NULL, "ip link set dev switch%d up", i);
 
 		for (j = 0; j < sw->num_connected; ++j) {
 			p = sw->connected[j];
 
-			netns_run(NULL, "brctl addif switch%d %s-%s",
-					i, p->owner->name, p->name);
+			netns_run(NULL,
+				  "ip link set dev %s-%s master switch%d",
+				  p->owner->name, p->name, i);
 		}
 	}
 	return 0;
@@ -144,12 +145,12 @@ static int switch_drv_stop(driver_t *drv)
 		for (j = 0; j < sw->num_connected; ++j) {
 			p = sw->connected[j];
 
-			netns_run(NULL, "brctl delif switch%d %s-%s",
-					i, p->owner->name, p->name);
+			netns_run(NULL, "ip link set dev %s-%s nomaster",
+					p->owner->name, p->name);
 		}
 
 		netns_run(NULL, "ip link set switch%d down", i);
-		netns_run(NULL, "brctl delbr switch%d", i);
+		netns_run(NULL, "ip link delete dev switch%d", i);
 	}
 	return 0;
 }
