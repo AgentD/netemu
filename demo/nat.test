@@ -1,7 +1,7 @@
 router0 daemon tcpdump --immediate-mode -n -w router0.pcap -i any
 router1 daemon tcpdump --immediate-mode -n -w router1.pcap -i any
 websrv daemon tcpdump --immediate-mode -n -w websrv.pcap -i any
-websrv daemon ./websrv.sh
+websrv daemon ./demo/websrv.sh
 
 # test connections on site 0
 mustwork
