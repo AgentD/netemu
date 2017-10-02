@@ -207,6 +207,11 @@ int cfg_parse_bandwidth(const char *buffer, int lineno, bandwidth_t *bw)
 	const char *ptr;
 	size_t i;
 
+	memset(bw, 0, sizeof(*bw));
+
+	if (!buffer[0])
+		return 0;
+
 	if (!isdigit(buffer[0])) {
 		fprintf(stderr, "%d: bandwidth must be "
 			"integer value\n", lineno);
