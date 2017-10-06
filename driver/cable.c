@@ -53,6 +53,23 @@ static int check_cable_port(parse_ctx_t *ctx, int index, int lineno)
 	return -1;
 }
 
+static int check_ratio(parse_ctx_t *ctx, int index, int lineno)
+{
+	char buffer[64];
+	double x;
+	(void)index;
+
+	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
+		return -1;
+
+	if (strlen(buffer) >= (sizeof(buffer) - 1)) {
+		fprintf(stderr, "%d: argument too long\n", lineno);
+		return -1;
+	}
+
+	return cfg_parse_ratio(buffer, lineno, &x);
+}
+
 static cfg_node_port *add_port(parse_ctx_t *ctx, int lineno, cfg_cable *cable)
 {
 	char node[MAX_NAME + 1], port[MAX_NAME + 1], limit[MAX_LIMIT_STR];
@@ -136,6 +153,49 @@ fail_errno:
 	return NULL;
 }
 
+static int read_ratio(parse_ctx_t *ctx, int lineno, double *value)
+{
+	char buffer[64];
+	cfg_token_t tk;
+	int ret;
+
+	ret = cfg_next_token(ctx, &tk, 0);
+	if (ret < 0)
+		goto fail_errno;
+	assert(ret > 0 && tk.id == TK_ARG);
+
+	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
+		return -1;
+
+	return cfg_parse_ratio(buffer, lineno, value);
+fail_errno:
+	fprintf(stderr, "%d: %s!\n", lineno, strerror(errno));
+	return -1;
+}
+
+static cfg_cable *add_loss(parse_ctx_t *ctx, int lineno, cfg_cable *cable)
+{
+	if (read_ratio(ctx, lineno, &cable->loss))
+		return NULL;
+	return cable;
+}
+
+static cfg_cable *add_corruption(parse_ctx_t *ctx, int lineno,
+				 cfg_cable *cable)
+{
+	if (read_ratio(ctx, lineno, &cable->corrupt))
+		return NULL;
+	return cable;
+}
+
+static cfg_cable *add_duplication(parse_ctx_t *ctx, int lineno,
+				  cfg_cable *cable)
+{
+	if (read_ratio(ctx, lineno, &cable->duplicate))
+		return NULL;
+	return cable;
+}
+
 static void cables_cleanup(void)
 {
 	cfg_cable *cable;
@@ -148,29 +208,46 @@ static void cables_cleanup(void)
 	}
 }
 
+static void netem_for_interface(cfg_cable *cable, const cfg_node_port *port,
+				bandwidth_t bw)
+{
+	char temp[MAX_LIMIT_STR * 2], buffer[512];
+	int have_netem = 0;
+
+	sprintf(buffer, "tc qdisc add dev %s root netem", port->name);
+
+	if (cable->loss > 0.0) {
+		sprintf(buffer + strlen(buffer), " loss random %3.2f%%",
+			cable->loss * 100.0);
+		have_netem = 1;
+	}
+
+	if (cable->corrupt > 0.0) {
+		sprintf(buffer + strlen(buffer), " corrupt %3.2f%%",
+			cable->corrupt * 100.0);
+		have_netem = 1;
+	}
+
+	if (cable->duplicate > 0.0) {
+		sprintf(buffer + strlen(buffer), " duplicate %3.2f%%",
+			cable->duplicate * 100.0);
+		have_netem = 1;
+	}
+
+	if (bw.value) {
+		cfg_bandwidth_to_str(temp, sizeof(temp), &bw);
+		sprintf(buffer + strlen(buffer), " rate %s", temp);
+		have_netem = 1;
+	}
+
+	if (have_netem)
+		netns_run(port->owner->name, "%s", buffer);
+}
+
 static void configure_netem(cfg_cable *cable)
 {
-	cfg_node_port *upper = cable->upper, *lower = cable->lower;
-	char temp[MAX_LIMIT_STR * 2];
-	bandwidth_t bw;
-
-	if (cable->uplimit.value) {
-		bw = cable->uplimit;
-		cfg_bandwidth_to_str(temp, sizeof(temp), &bw);
-
-		netns_run(lower->owner->name,
-			"tc qdisc add dev %s root netem rate %s",
-			lower->name, temp);
-	}
-
-	if (cable->downlimit.value) {
-		bw = cable->downlimit;
-		cfg_bandwidth_to_str(temp, sizeof(temp), &bw);
-
-		netns_run(upper->owner->name,
-			"tc qdisc add dev %s root netem rate %s",
-			upper->name, temp);
-	}
+	netem_for_interface(cable, cable->upper, cable->uplimit);
+	netem_for_interface(cable, cable->lower, cable->downlimit);
 }
 
 static int cable_drv_start(driver_t *drv)
@@ -253,6 +330,24 @@ static parser_token_t cable_tokens[] = {
 		.argcount = 2,
 		.argfun = check_cable_port,
 		.deserialize = (deserialize_fun_t)add_port,
+	}, {
+		.keyword = "loss",
+		.flags = FLAG_ARG_EXACT,
+		.argcount = 1,
+		.argfun = check_ratio,
+		.deserialize = (deserialize_fun_t)add_loss,
+	}, {
+		.keyword = "corrupt",
+		.flags = FLAG_ARG_EXACT,
+		.argcount = 1,
+		.argfun = check_ratio,
+		.deserialize = (deserialize_fun_t)add_corruption,
+	}, {
+		.keyword = "duplicate",
+		.flags = FLAG_ARG_EXACT,
+		.argcount = 1,
+		.argfun = check_ratio,
+		.deserialize = (deserialize_fun_t)add_duplication,
 	}, {
 		.keyword = NULL,
 	},

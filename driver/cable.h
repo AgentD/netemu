@@ -13,6 +13,10 @@ typedef struct cfg_cable {
 	bandwidth_t uplimit;
 	bandwidth_t downlimit;
 
+	double loss;
+	double corrupt;
+	double duplicate;
+
 	struct cfg_cable *next;
 } cfg_cable;
 
