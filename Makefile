@@ -8,7 +8,7 @@ all: nettool testtool
 
 nettool: nettool.o cfg.o netns.o cfg_token.o cfg_parse.o node.o switch.o \
 	cable.o driver.o graph.o
-	$(CC) $^ -o $@
+	$(CC) $^ -lm -o $@
 
 testtool: testtool.o netns.o daemon.o
 	$(CC) $^ -o $@

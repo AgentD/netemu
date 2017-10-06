@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <math.h>
 
 #include <arpa/inet.h>
 
@@ -242,6 +243,57 @@ int cfg_parse_bandwidth(const char *buffer, int lineno, bandwidth_t *bw)
 	}
 
 	return 0;
+}
+
+int cfg_parse_ratio(const char *buffer, int lineno, double *out)
+{
+	unsigned int a = 0, b = 0, blen = 0;
+	const char *ptr = buffer;
+
+	*out = 0.0;
+
+	/* digit+ */
+	if (!isdigit(*ptr))
+		goto fail;
+
+	for (ptr = buffer; isdigit(*ptr); ++ptr)
+		a = a * 10 + (*ptr - '0');
+
+	*out = a;
+
+	/* ['.' digit+] */
+	if (*ptr == '.') {
+		++ptr;
+
+		if (!isdigit(*ptr))
+			goto fail;
+
+		for (; isdigit(*ptr); ++ptr) {
+			b = b * 10 + (*ptr - '0');
+			++blen;
+		}
+
+		*out += b * pow(10.0, -((double)blen));
+	}
+
+	/* ['%'] */
+	if (*ptr == '%') {
+		++ptr;
+		*out *= 0.01;
+	}
+
+	if (*ptr)
+		goto fail;
+
+	if (*out > 1.0) {
+		fprintf(stderr, "%d: ratio larger than 100%%!\n", lineno);
+		return -1;
+	}
+
+	return 0;
+fail:
+	fprintf(stderr, "%d: expected numeric value\n", lineno);
+	return -1;
 }
 
 int cfg_bandwidth_to_str(char *buffer, size_t len, bandwidth_t *bw)
