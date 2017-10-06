@@ -53,6 +53,23 @@ static int check_cable_port(parse_ctx_t *ctx, int index, int lineno)
 	return -1;
 }
 
+static int check_delay(parse_ctx_t *ctx, int index, int lineno)
+{
+	char buffer[64];
+	unsigned long l;
+	(void)index;
+
+	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
+		return -1;
+
+	if (strlen(buffer) >= (sizeof(buffer) - 1)) {
+		fprintf(stderr, "%d: argument too long\n", lineno);
+		return -1;
+	}
+
+	return cfg_parse_time_ms(buffer, lineno, &l);
+}
+
 static int check_ratio(parse_ctx_t *ctx, int index, int lineno)
 {
 	char buffer[64];
@@ -173,6 +190,29 @@ fail_errno:
 	return -1;
 }
 
+static cfg_cable *add_delay(parse_ctx_t *ctx, int lineno, cfg_cable *cable)
+{
+	char buffer[64];
+	cfg_token_t tk;
+	int ret;
+
+	ret = cfg_next_token(ctx, &tk, 0);
+	if (ret < 0)
+		goto fail_errno;
+	assert(ret > 0 && tk.id == TK_ARG);
+
+	if (cfg_get_arg(ctx, buffer, sizeof(buffer)))
+		return NULL;
+
+	if (cfg_parse_time_ms(buffer, lineno, &cable->delay))
+		return NULL;
+
+	return cable;
+fail_errno:
+	fprintf(stderr, "%d: %s!\n", lineno, strerror(errno));
+	return NULL;
+}
+
 static cfg_cable *add_loss(parse_ctx_t *ctx, int lineno, cfg_cable *cable)
 {
 	if (read_ratio(ctx, lineno, &cable->loss))
@@ -215,6 +255,11 @@ static void netem_for_interface(cfg_cable *cable, const cfg_node_port *port,
 	int have_netem = 0;
 
 	sprintf(buffer, "tc qdisc add dev %s root netem", port->name);
+
+	if (cable->delay) {
+		sprintf(buffer + strlen(buffer), " delay %lums", cable->delay);
+		have_netem = 1;
+	}
 
 	if (cable->loss > 0.0) {
 		sprintf(buffer + strlen(buffer), " loss random %3.2f%%",
@@ -348,6 +393,12 @@ static parser_token_t cable_tokens[] = {
 		.argcount = 1,
 		.argfun = check_ratio,
 		.deserialize = (deserialize_fun_t)add_duplication,
+	}, {
+		.keyword = "delay",
+		.flags = FLAG_ARG_EXACT,
+		.argcount = 1,
+		.argfun = check_delay,
+		.deserialize = (deserialize_fun_t)add_delay,
 	}, {
 		.keyword = NULL,
 	},

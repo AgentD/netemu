@@ -16,6 +16,7 @@ typedef struct cfg_cable {
 	double loss;
 	double corrupt;
 	double duplicate;
+	unsigned long delay;
 
 	struct cfg_cable *next;
 } cfg_cable;

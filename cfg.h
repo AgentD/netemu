@@ -195,6 +195,8 @@ int cfg_parse_bandwidth(const char *buffer, int lineno, bandwidth_t *bw);
 
 int cfg_parse_ratio(const char *buffer, int lineno, double *out);
 
+int cfg_parse_time_ms(const char *buffer, int lineno, unsigned long *out);
+
 int cfg_bandwidth_to_str(char *buffer, size_t len, bandwidth_t *bw);
 
 /*

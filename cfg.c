@@ -297,6 +297,36 @@ fail:
 	return -1;
 }
 
+int cfg_parse_time_ms(const char *buffer, int lineno, unsigned long *out)
+{
+	const char *ptr = buffer;
+
+	*out = 0;
+
+	/* digit+ */
+	if (!isdigit(*ptr))
+		goto fail;
+
+	for (ptr = buffer; isdigit(*ptr); ++ptr)
+		*out = (*out) * 10 + (*ptr - '0');
+
+	/* ['ms'] */
+	while (isspace(*ptr))
+		++ptr;
+
+	if (!strcasecmp(ptr, "ms"))
+		return 0;
+
+	if (*ptr)
+		goto fail;
+
+	*out *= 1000UL;
+	return 0;
+fail:
+	fprintf(stderr, "%d: expected numeric value\n", lineno);
+	return -1;
+}
+
 int cfg_bandwidth_to_str(char *buffer, size_t len, bandwidth_t *bw)
 {
 	size_t i, sfx = 0;
