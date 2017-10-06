@@ -208,7 +208,8 @@ int cfg_parse_bandwidth(const char *buffer, int lineno, bandwidth_t *bw)
 	const char *ptr;
 	size_t i;
 
-	memset(bw, 0, sizeof(*bw));
+	if (bw)
+		memset(bw, 0, sizeof(*bw));
 
 	if (!buffer[0])
 		return 0;
